@@ -1,0 +1,39 @@
+# ==============================================================
+#  gestflow — requirements.txt
+#  Python 3.10 | Sin conflictos de versiones
+# ==============================================================
+
+# Deep Learning — modelo, capas, callbacks, MobileNetV2
+tensorflow==2.15.0
+h5py==3.11.0
+
+# Procesamiento numerico — augmentation, tensores, operaciones
+numpy==1.26.4
+scipy==1.11.4
+
+# Vision computacional — frames, resize, BGR/RGB, VideoWriter
+opencv-python==4.9.0.80
+pillow==10.3.0
+
+# Machine Learning — StratifiedKFold, classification_report,
+# confusion_matrix, accuracy_score, train_test_split
+scikit-learn==1.3.2
+
+# Visualizacion — curvas de entrenamiento, heatmaps,
+# confusion matrix, graficas por fold
+matplotlib==3.8.4
+seaborn==0.13.2
+
+# Control del escritorio Windows — cursor, clicks,
+# scroll, drag, hotkeys
+pyautogui==0.9.54
+pygetwindow==0.0.9
+pywin32==306
+pycaw==20230407
+comtypes==1.4.1
+
+# Utilidades — barra de progreso entrenamiento,
+# analisis del dataset, pausa con ESC
+tqdm==4.66.2
+pandas==2.1.4
+keyboard==0.13.5
