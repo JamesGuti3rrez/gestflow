@@ -16,7 +16,6 @@ from tensorflow.keras.callbacks import (
 
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 from config import (
-    MODEL_PATH,
     MODEL_DIR,
     EARLY_STOPPING_PATIENCE,
     REDUCE_LR_PATIENCE,
@@ -28,9 +27,6 @@ from config import (
 
 # -------------------------------------------------------------
 #  EarlyStopping
-#  Detiene el entrenamiento si val_loss no mejora
-#  en EARLY_STOPPING_PATIENCE epocas consecutivas
-#  Restaura los mejores pesos automaticamente
 # -------------------------------------------------------------
 
 def get_early_stopping():
@@ -45,8 +41,6 @@ def get_early_stopping():
 
 # -------------------------------------------------------------
 #  ReduceLROnPlateau
-#  Reduce el learning rate cuando val_loss se estanca
-#  Factor y paciencia definidos en config.py
 # -------------------------------------------------------------
 
 def get_reduce_lr():
@@ -62,8 +56,6 @@ def get_reduce_lr():
 
 # -------------------------------------------------------------
 #  ModelCheckpoint
-#  Guarda el mejor modelo segun val_accuracy
-#  Solo guarda cuando hay mejora real
 # -------------------------------------------------------------
 
 def get_model_checkpoint(fold=None):
@@ -88,8 +80,6 @@ def get_model_checkpoint(fold=None):
 
 # -------------------------------------------------------------
 #  CSVLogger
-#  Guarda el historial de entrenamiento por fold
-#  en un archivo CSV para analisis posterior
 # -------------------------------------------------------------
 
 def get_csv_logger(fold=None):
@@ -111,8 +101,6 @@ def get_csv_logger(fold=None):
 
 # -------------------------------------------------------------
 #  Callback personalizado — reporte por epoca
-#  Imprime loss, accuracy, val_loss y val_accuracy
-#  de forma limpia al final de cada epoca
 # -------------------------------------------------------------
 
 class ReporteEpoca(tf.keras.callbacks.Callback):
@@ -130,9 +118,11 @@ class ReporteEpoca(tf.keras.callbacks.Callback):
         acc      = logs.get("accuracy",     0.0)
         val_loss = logs.get("val_loss",     0.0)
         val_acc  = logs.get("val_accuracy", 0.0)
-        lr       = float(
-            tf.keras.backend.get_value(self.model.optimizer.learning_rate)
-        )
+
+        try:
+            lr = float(tf.keras.backend.get_value(self.model.optimizer.learning_rate))
+        except Exception:
+            lr = 0.0
 
         print(
             f"  {fold_str}Epoca {epoch + 1:03d} | "
@@ -144,7 +134,6 @@ class ReporteEpoca(tf.keras.callbacks.Callback):
 
 # -------------------------------------------------------------
 #  Callback personalizado — reporte de fine-tuning
-#  Avisa cuando empieza la fase de fine-tuning
 # -------------------------------------------------------------
 
 class AvisoFineTuning(tf.keras.callbacks.Callback):
@@ -159,7 +148,6 @@ class AvisoFineTuning(tf.keras.callbacks.Callback):
 
 # -------------------------------------------------------------
 #  Conjunto completo de callbacks para entrenamiento inicial
-#  Fase 1 — MobileNetV2 congelada
 # -------------------------------------------------------------
 
 def get_callbacks_fase1(fold=None):
@@ -174,8 +162,6 @@ def get_callbacks_fase1(fold=None):
 
 # -------------------------------------------------------------
 #  Conjunto completo de callbacks para fine-tuning
-#  Fase 2 — ultimas capas de MobileNetV2 descongeladas
-#  Paciencia mas alta porque el fine-tuning es mas lento
 # -------------------------------------------------------------
 
 def get_callbacks_fase2(fold=None):

@@ -25,9 +25,6 @@ from config import (
 
 # -------------------------------------------------------------
 #  Extraccion de frames de un video
-#  Extrae FRAME_COUNT frames uniformemente distribuidos
-#  Devuelve tensor (FRAME_COUNT, FRAME_HEIGHT, FRAME_WIDTH, 3)
-#  normalizado entre 0.0 y 1.0
 # -------------------------------------------------------------
 
 def extract_frames(video_path):
@@ -68,8 +65,6 @@ def extract_frames(video_path):
 
 # -------------------------------------------------------------
 #  Verificacion del dataset
-#  Revisa que todas las carpetas de gestos existan
-#  y que tengan al menos un video
 # -------------------------------------------------------------
 
 def verify_dataset():
@@ -101,9 +96,6 @@ def verify_dataset():
 
 # -------------------------------------------------------------
 #  Carga del dataset completo
-#  Lee todos los videos de raw_videos/
-#  Devuelve X shape (N, FRAME_COUNT, H, W, 3)
-#           y shape (N,) con indices enteros de clase
 # -------------------------------------------------------------
 
 def load_dataset():
@@ -155,7 +147,6 @@ def load_dataset():
 
 # -------------------------------------------------------------
 #  Resumen del dataset por clase
-#  Muestra cuantos videos hay por gesto
 # -------------------------------------------------------------
 
 def dataset_summary():
@@ -188,8 +179,6 @@ def dataset_summary():
 
 # -------------------------------------------------------------
 #  Split estratificado del dataset
-#  Divide en train, validation y test
-#  Mantiene proporcion de clases en cada split
 # -------------------------------------------------------------
 
 def split_dataset(X, y):

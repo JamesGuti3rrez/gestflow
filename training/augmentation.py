@@ -5,11 +5,11 @@
 #  Salida:   lista de tensores aumentados incluyendo el original
 # =============================================================
 
+import os
+import sys
 import numpy as np
 import cv2
 from scipy import interpolate
-import sys
-import os
 
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 from config import (
@@ -29,7 +29,6 @@ from config import (
 
 # -------------------------------------------------------------
 #  Tecnica 1 — Original
-#  Sin modificacion, se incluye como primera muestra
 # -------------------------------------------------------------
 
 def augment_original(frames):
@@ -39,7 +38,6 @@ def augment_original(frames):
 # -------------------------------------------------------------
 #  Tecnica 2 — Gaussian Jitter
 #  Agrega ruido gaussiano sobre los pixeles del frame
-#  Simula variaciones de camara, compresion y ruido de sensor
 # -------------------------------------------------------------
 
 def augment_gaussian_jitter(frames):
@@ -55,7 +53,6 @@ def augment_gaussian_jitter(frames):
 # -------------------------------------------------------------
 #  Tecnica 3 — Spatial Scaling (zoom)
 #  Escala la mano hacia adentro o afuera del centro del frame
-#  Simula diferentes distancias a la camara
 # -------------------------------------------------------------
 
 def augment_spatial_scaling(frames):
@@ -67,8 +64,8 @@ def augment_spatial_scaling(frames):
         h, w = img.shape[:2]
 
         center_x, center_y = w // 2, h // 2
-        new_w = int(w * scale)
-        new_h = int(h * scale)
+        new_w = max(1, int(w * scale))
+        new_h = max(1, int(h * scale))
 
         resized = cv2.resize(img, (new_w, new_h))
 
@@ -93,7 +90,6 @@ def augment_spatial_scaling(frames):
 # -------------------------------------------------------------
 #  Tecnica 4 — Horizontal Mirroring
 #  Espeja todos los frames horizontalmente
-#  Simula uso con mano izquierda o derecha
 # -------------------------------------------------------------
 
 def augment_horizontal_mirroring(frames):
@@ -108,7 +104,6 @@ def augment_horizontal_mirroring(frames):
 # -------------------------------------------------------------
 #  Tecnica 5 — Time Warping
 #  Remuestrea los frames en el eje temporal
-#  Simula gestos ejecutados a diferente velocidad
 # -------------------------------------------------------------
 
 def augment_time_warping(frames):
@@ -139,7 +134,6 @@ def augment_time_warping(frames):
 # -------------------------------------------------------------
 #  Tecnica 6 — Brightness Shift
 #  Varia el brillo global del video
-#  Simula diferentes condiciones de iluminacion
 # -------------------------------------------------------------
 
 def augment_brightness_shift(frames):
@@ -150,8 +144,6 @@ def augment_brightness_shift(frames):
 
 # -------------------------------------------------------------
 #  Aplicador principal
-#  Recibe un tensor y devuelve AUGMENTATION_FACTOR tensores
-#  El primero siempre es el original
 # -------------------------------------------------------------
 
 TECHNIQUES = [
@@ -181,10 +173,6 @@ def apply_augmentation(frames):
 
 # -------------------------------------------------------------
 #  Aplicador sobre dataset completo
-#  Entrada:  X shape (N, FRAME_COUNT, H, W, 3)
-#            y shape (N,)
-#  Salida:   X_aug shape (N * AUGMENTATION_FACTOR, FRAME_COUNT, H, W, 3)
-#            y_aug shape (N * AUGMENTATION_FACTOR,)
 # -------------------------------------------------------------
 
 def augment_dataset(X, y):

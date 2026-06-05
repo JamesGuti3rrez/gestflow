@@ -1,8 +1,8 @@
 # =============================================================
 #  gestflow — training/01_record.py
 #  Script de grabacion del dataset
-#  Guia al usuario gesto por gesto con cuenta regresiva
-#  Guarda los videos en dataset/raw_videos/[GESTO]/
+#  Muestra un recuadro fijo donde el usuario pone la mano
+#  Solo graba esa zona, ignorando cara y cuerpo
 #
 #  Uso:
 #      python training/01_record.py
@@ -11,6 +11,7 @@
 import os
 import sys
 import cv2
+import numpy as np
 import time
 
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
@@ -21,8 +22,6 @@ from config import (
     VIDEO_FPS,
     VIDEO_DURATION,
     VIDEOS_PER_GESTURE,
-    FRAME_WIDTH,
-    FRAME_HEIGHT,
     RECORD_WIDTH,
     RECORD_HEIGHT,
     COUNTDOWN_SECONDS,
@@ -30,18 +29,81 @@ from config import (
     READY_COLOR,
     FONT_SCALE,
     FONT_THICKNESS,
+    RECORDER_NAME,
+    ROI_X1,
+    ROI_Y1,
+    ROI_X2,
+    ROI_Y2,
 )
 
 
 # -------------------------------------------------------------
-#  Constantes visuales internas
+#  Constantes visuales
 # -------------------------------------------------------------
 
-FONT          = cv2.FONT_HERSHEY_SIMPLEX
-COLOR_WHITE   = (255, 255, 255)
-COLOR_BLACK   = (0,   0,   0  )
-COLOR_YELLOW  = (0,   255, 255)
-FRAME_TOTAL   = int(VIDEO_FPS * VIDEO_DURATION)
+FONT         = cv2.FONT_HERSHEY_SIMPLEX
+COLOR_WHITE  = (255, 255, 255)
+COLOR_BLACK  = (0,   0,   0  )
+COLOR_YELLOW = (0,   255, 255)
+COLOR_GREEN  = (0,   255, 0  )
+COLOR_RED    = (0,   0,   255)
+FRAME_TOTAL  = int(VIDEO_FPS * VIDEO_DURATION)
+
+
+# -------------------------------------------------------------
+#  Dibuja texto con fondo negro
+# -------------------------------------------------------------
+
+def draw_text(frame, texto, pos, color=COLOR_WHITE,
+              scale=None, thickness=None):
+    scale     = scale     or FONT_SCALE
+    thickness = thickness or FONT_THICKNESS
+
+    (tw, th), _ = cv2.getTextSize(texto, FONT, scale, thickness)
+    x, y        = pos
+
+    cv2.rectangle(frame, (x - 4, y - th - 4),
+                  (x + tw + 4, y + 4), COLOR_BLACK, -1)
+    cv2.putText(frame, texto, (x, y), FONT, scale,
+                color, thickness, cv2.LINE_AA)
+
+
+# -------------------------------------------------------------
+#  Dibuja el recuadro de la zona de grabacion
+# -------------------------------------------------------------
+
+def dibujar_roi(frame, grabando=False):
+    color = RECORDING_COLOR if grabando else COLOR_YELLOW
+    grosor = 3
+
+    cv2.rectangle(frame, (ROI_X1, ROI_Y1), (ROI_X2, ROI_Y2), color, grosor)
+
+    esquina = 20
+    cv2.line(frame, (ROI_X1, ROI_Y1), (ROI_X1 + esquina, ROI_Y1), color, grosor + 1)
+    cv2.line(frame, (ROI_X1, ROI_Y1), (ROI_X1, ROI_Y1 + esquina), color, grosor + 1)
+    cv2.line(frame, (ROI_X2, ROI_Y1), (ROI_X2 - esquina, ROI_Y1), color, grosor + 1)
+    cv2.line(frame, (ROI_X2, ROI_Y1), (ROI_X2, ROI_Y1 + esquina), color, grosor + 1)
+    cv2.line(frame, (ROI_X1, ROI_Y2), (ROI_X1 + esquina, ROI_Y2), color, grosor + 1)
+    cv2.line(frame, (ROI_X1, ROI_Y2), (ROI_X1, ROI_Y2 - esquina), color, grosor + 1)
+    cv2.line(frame, (ROI_X2, ROI_Y2), (ROI_X2 - esquina, ROI_Y2), color, grosor + 1)
+    cv2.line(frame, (ROI_X2, ROI_Y2), (ROI_X2, ROI_Y2 - esquina), color, grosor + 1)
+
+    if not grabando:
+        draw_text(frame, "PON TU MANO AQUI",
+                  (ROI_X1 + 10, ROI_Y1 + 30),
+                  COLOR_YELLOW, scale=0.6)
+
+
+# -------------------------------------------------------------
+#  Recorta la zona de la mano del frame completo
+#  y la redimensiona al tamano de grabacion
+# -------------------------------------------------------------
+
+def recortar_roi(frame):
+    recorte = frame[ROI_Y1:ROI_Y2, ROI_X1:ROI_X2]
+    if recorte.size == 0:
+        return cv2.resize(frame, (RECORD_WIDTH, RECORD_HEIGHT))
+    return cv2.resize(recorte, (RECORD_WIDTH, RECORD_HEIGHT))
 
 
 # -------------------------------------------------------------
@@ -60,12 +122,10 @@ def crear_carpetas():
 # -------------------------------------------------------------
 
 def contar_videos(gesto):
-    path   = os.path.join(DATASET_DIR, gesto)
-    videos = [
-        f for f in os.listdir(path)
-        if f.lower().endswith(".mp4")
-    ]
-    return len(videos)
+    path = os.path.join(DATASET_DIR, gesto)
+    if not os.path.exists(path):
+        return 0
+    return len([f for f in os.listdir(path) if f.lower().endswith(".mp4")])
 
 
 # -------------------------------------------------------------
@@ -73,38 +133,25 @@ def contar_videos(gesto):
 # -------------------------------------------------------------
 
 def siguiente_numero(gesto):
-    return contar_videos(gesto) + 1
+    path    = os.path.join(DATASET_DIR, gesto)
+    prefijo = f"{RECORDER_NAME}_{gesto.lower()}_"
+    numeros = []
 
+    if os.path.exists(path):
+        for f in os.listdir(path):
+            if f.lower().endswith(".mp4") and f.startswith(prefijo):
+                try:
+                    numeros.append(
+                        int(f.replace(prefijo, "").replace(".mp4", ""))
+                    )
+                except ValueError:
+                    continue
 
-# -------------------------------------------------------------
-#  Dibuja texto con fondo negro para legibilidad
-# -------------------------------------------------------------
-
-def draw_text(frame, texto, pos, color=COLOR_WHITE,
-              scale=None, thickness=None):
-    scale     = scale     or FONT_SCALE
-    thickness = thickness or FONT_THICKNESS
-
-    (tw, th), _ = cv2.getTextSize(texto, FONT, scale, thickness)
-    x, y        = pos
-
-    cv2.rectangle(
-        frame,
-        (x - 4, y - th - 4),
-        (x + tw + 4, y + 4),
-        COLOR_BLACK,
-        -1,
-    )
-    cv2.putText(
-        frame, texto, (x, y),
-        FONT, scale, color, thickness,
-        cv2.LINE_AA,
-    )
+    return max(numeros) + 1 if numeros else 1
 
 
 # -------------------------------------------------------------
 #  Pantalla de bienvenida
-#  Muestra estado de cada gesto antes de empezar
 # -------------------------------------------------------------
 
 def pantalla_bienvenida(cap):
@@ -116,33 +163,26 @@ def pantalla_bienvenida(cap):
         frame = cv2.flip(frame, 1)
         h, w  = frame.shape[:2]
 
-        overlay        = frame.copy()
-        overlay_height = min(60 + len(GESTURES) * 36 + 60, h)
-        cv2.rectangle(overlay, (0, 0), (w, overlay_height), COLOR_BLACK, -1)
-        cv2.addWeighted(overlay, 0.6, frame, 0.4, 0, frame)
+        overlay_h = min(60 + len(GESTURES) * 36 + 60, h)
+        panel     = frame.copy()
+        cv2.rectangle(panel, (0, 0), (w, overlay_h), COLOR_BLACK, -1)
+        cv2.addWeighted(panel, 0.6, frame, 0.4, 0, frame)
 
-        draw_text(frame, "gestflow — Grabacion de dataset",
+        draw_text(frame, f"gestflow — Grabacion ({RECORDER_NAME})",
                   (20, 36), COLOR_YELLOW, scale=0.8)
 
         for i, gesto in enumerate(GESTURES):
             count  = contar_videos(gesto)
             estado = f"{count:3d} / {VIDEOS_PER_GESTURE}"
             color  = READY_COLOR if count >= VIDEOS_PER_GESTURE else COLOR_WHITE
-            draw_text(
-                frame,
-                f"  {gesto:<20} {estado}",
-                (20, 72 + i * 36),
-                color,
-                scale=0.65,
-            )
+            draw_text(frame, f"  {gesto:<20} {estado}",
+                      (20, 72 + i * 36), color, scale=0.65)
 
-        draw_text(
-            frame,
-            "Presiona ESPACIO para empezar  |  ESC para salir",
-            (20, overlay_height - 16),
-            COLOR_YELLOW,
-            scale=0.6,
-        )
+        draw_text(frame,
+                  "ESPACIO para empezar  |  ESC para salir",
+                  (20, overlay_h - 16), COLOR_YELLOW, scale=0.6)
+
+        dibujar_roi(frame)
 
         cv2.imshow("gestflow — grabacion", frame)
         key = cv2.waitKey(1) & 0xFF
@@ -166,20 +206,22 @@ def pantalla_gesto(cap, gesto, numero, total):
         frame = cv2.flip(frame, 1)
         h, w  = frame.shape[:2]
 
-        overlay = frame.copy()
-        cv2.rectangle(overlay, (0, 0), (w, 180), COLOR_BLACK, -1)
-        cv2.addWeighted(overlay, 0.65, frame, 0.35, 0, frame)
+        dibujar_roi(frame)
+
+        panel = frame.copy()
+        cv2.rectangle(panel, (0, 0), (w, 150), COLOR_BLACK, -1)
+        cv2.addWeighted(panel, 0.65, frame, 0.35, 0, frame)
 
         draw_text(frame, f"Gesto : {gesto}",
-                  (20, 40), COLOR_YELLOW, scale=0.9)
+                  (20, 36), COLOR_YELLOW, scale=0.9)
         draw_text(frame, f"Video : {numero} de {total}",
-                  (20, 80), COLOR_WHITE, scale=0.7)
+                  (20, 72), COLOR_WHITE, scale=0.7)
         draw_text(frame,
-                  "Preparate y mantente fuera del frame",
-                  (20, 116), COLOR_WHITE, scale=0.65)
+                  "ESPACIO grabar  |  S saltar  |  ESC salir",
+                  (20, 108), COLOR_YELLOW, scale=0.55)
         draw_text(frame,
-                  "ESPACIO grabar  |  S saltar gesto  |  ESC salir",
-                  (20, 152), COLOR_YELLOW, scale=0.55)
+                  "Manten la mano dentro del recuadro amarillo",
+                  (20, h - 20), COLOR_YELLOW, scale=0.55)
 
         cv2.imshow("gestflow — grabacion", frame)
         key = cv2.waitKey(1) & 0xFF
@@ -207,14 +249,16 @@ def cuenta_regresiva(cap, gesto):
             frame = cv2.flip(frame, 1)
             h, w  = frame.shape[:2]
 
+            dibujar_roi(frame)
+
             draw_text(frame, f"Gesto : {gesto}",
                       (20, 40), COLOR_YELLOW, scale=0.9)
             draw_text(frame, f"Grabando en : {i}",
-                      (w // 2 - 100, h // 2),
+                      (w // 2 - 120, h // 2),
                       COLOR_YELLOW, scale=1.2, thickness=3)
             draw_text(frame,
-                      "Entra al frame YA con el gesto formado",
-                      (20, h - 30), COLOR_WHITE, scale=0.6)
+                      "Manten el gesto formado dentro del recuadro",
+                      (20, h - 20), COLOR_WHITE, scale=0.55)
 
             cv2.imshow("gestflow — grabacion", frame)
             cv2.waitKey(1)
@@ -222,13 +266,11 @@ def cuenta_regresiva(cap, gesto):
 
 # -------------------------------------------------------------
 #  Grabacion de un video
-#  Captura FRAME_TOTAL frames y los guarda como MP4
-#  Graba en RECORD_WIDTH x RECORD_HEIGHT
-#  El modelo los reducira a FRAME_WIDTH x FRAME_HEIGHT
+#  Recorta solo la zona del recuadro y la guarda
 # -------------------------------------------------------------
 
 def grabar_video(cap, gesto, numero):
-    nombre = f"{gesto.lower()}_{numero:03d}.mp4"
+    nombre = f"{RECORDER_NAME}_{gesto.lower()}_{numero:03d}.mp4"
     ruta   = os.path.join(DATASET_DIR, gesto, nombre)
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
     writer = cv2.VideoWriter(
@@ -244,17 +286,21 @@ def grabar_video(cap, gesto, numero):
             break
 
         frame   = cv2.flip(frame, 1)
-        resized = cv2.resize(frame, (RECORD_WIDTH, RECORD_HEIGHT))
-        writer.write(resized)
+        recorte = recortar_roi(frame)
+        writer.write(recorte)
 
-        progreso = int((frames_grabados / FRAME_TOTAL) * (RECORD_WIDTH - 40))
+        display  = frame.copy()
+        progreso = int((frames_grabados / FRAME_TOTAL) * (ROI_X2 - ROI_X1))
 
-        display = resized.copy()
-        cv2.rectangle(display, (20, RECORD_HEIGHT - 30),
-                      (RECORD_WIDTH - 20, RECORD_HEIGHT - 14),
+        dibujar_roi(display, grabando=True)
+
+        cv2.rectangle(display,
+                      (ROI_X1, ROI_Y2 + 5),
+                      (ROI_X2, ROI_Y2 + 15),
                       COLOR_BLACK, -1)
-        cv2.rectangle(display, (20, RECORD_HEIGHT - 30),
-                      (20 + progreso, RECORD_HEIGHT - 14),
+        cv2.rectangle(display,
+                      (ROI_X1, ROI_Y2 + 5),
+                      (ROI_X1 + progreso, ROI_Y2 + 15),
                       RECORDING_COLOR, -1)
 
         draw_text(display, "GRABANDO",
@@ -284,12 +330,14 @@ def pantalla_confirmacion(cap, ruta_video):
         frame = cv2.flip(frame, 1)
         h, w  = frame.shape[:2]
 
-        overlay = frame.copy()
-        cv2.rectangle(overlay, (0, h - 100), (w, h), COLOR_BLACK, -1)
-        cv2.addWeighted(overlay, 0.7, frame, 0.3, 0, frame)
+        dibujar_roi(frame)
+
+        panel = frame.copy()
+        cv2.rectangle(panel, (0, h - 100), (w, h), COLOR_BLACK, -1)
+        cv2.addWeighted(panel, 0.7, frame, 0.3, 0, frame)
 
         draw_text(frame, "Video guardado correctamente",
-                  (20, h - 72), READY_COLOR, scale=0.7)
+                  (20, h - 76), READY_COLOR, scale=0.7)
         draw_text(frame,
                   "ESPACIO continuar  |  R repetir  |  ESC salir",
                   (20, h - 36), COLOR_YELLOW, scale=0.6)
@@ -300,14 +348,15 @@ def pantalla_confirmacion(cap, ruta_video):
         if key == 27:
             return "salir"
         if key == ord("r"):
-            os.remove(ruta_video)
+            if os.path.exists(ruta_video):
+                os.remove(ruta_video)
             return "repetir"
         if key == 32:
             return "continuar"
 
 
 # -------------------------------------------------------------
-#  Resumen final al terminar la sesion
+#  Resumen final
 # -------------------------------------------------------------
 
 def resumen_final():
@@ -319,8 +368,8 @@ def resumen_final():
     total_faltantes = 0
 
     for gesto in GESTURES:
-        grabados   = contar_videos(gesto)
-        faltantes  = max(0, VIDEOS_PER_GESTURE - grabados)
+        grabados        = contar_videos(gesto)
+        faltantes       = max(0, VIDEOS_PER_GESTURE - grabados)
         total_grabados  += grabados
         total_faltantes += faltantes
         print(f"  {gesto:<22} {grabados:>10} {faltantes:>10}")
@@ -340,6 +389,8 @@ def resumen_final():
 
 def main():
     print("\n  gestflow — Script de grabacion")
+    print(f"  Usuario      : {RECORDER_NAME}")
+    print(f"  Zona de mano : ({ROI_X1},{ROI_Y1}) → ({ROI_X2},{ROI_Y2})")
     print("  Inicializando camara...")
 
     crear_carpetas()
@@ -353,7 +404,12 @@ def main():
 
     if not cap.isOpened():
         print(f"\n  Error: No se pudo abrir la camara (indice {CAMERA_INDEX})")
-        print(f"  Verifica CAMERA_INDEX en config.py")
+        sys.exit(1)
+
+    ret, _ = cap.read()
+    if not ret:
+        print("\n  Error: La camara se abrio pero no devuelve frames.")
+        cap.release()
         sys.exit(1)
 
     print("  Camara lista.")
@@ -378,9 +434,7 @@ def main():
 
         while contar_videos(gesto) < VIDEOS_PER_GESTURE:
             numero = siguiente_numero(gesto)
-            total  = VIDEOS_PER_GESTURE
-
-            accion = pantalla_gesto(cap, gesto, numero, total)
+            accion = pantalla_gesto(cap, gesto, numero, VIDEOS_PER_GESTURE)
 
             if accion == "salir":
                 cap.release()
@@ -394,7 +448,6 @@ def main():
 
             cuenta_regresiva(cap, gesto)
             ruta = grabar_video(cap, gesto, numero)
-
             confirmacion = pantalla_confirmacion(cap, ruta)
 
             if confirmacion == "salir":

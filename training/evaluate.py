@@ -1,6 +1,6 @@
 # =============================================================
 #  gestflow — training/evaluate.py
-#  Validacion cruzada 5-fold estratificada
+#  Validacion cruzada estratificada
 #  Metricas por clase: Precision, Recall, F1
 #  Matriz de confusion y curvas de entrenamiento
 # =============================================================
@@ -25,20 +25,19 @@ from config import (
     EPOCHS,
     BATCH_SIZE,
     MODEL_DIR,
-    MODEL_PATH,
 )
 
 
 # -------------------------------------------------------------
-#  Validacion cruzada 5-fold estratificada
-#  Entrena y evalua el modelo en cada fold
-#  Devuelve historial completo y metricas por fold
+#  Validacion cruzada estratificada
 # -------------------------------------------------------------
 
 def cross_validate(X, y, build_model_fn, get_callbacks_fn):
     from augmentation import augment_dataset
+    from model        import unfreeze_top_layers
+    from callbacks    import get_callbacks_fase2
 
-    skf     = StratifiedKFold(
+    skf = StratifiedKFold(
         n_splits=KFOLD_SPLITS,
         shuffle=True,
         random_state=42,
@@ -66,7 +65,7 @@ def cross_validate(X, y, build_model_fn, get_callbacks_fn):
         print(f"  Muestras entrenamiento (aumentadas) : {len(X_train_aug)}")
         print(f"  Muestras validacion                 : {len(X_val_fold)}")
 
-        model = build_model_fn()
+        model     = build_model_fn()
         callbacks = get_callbacks_fn(fold=fold)
 
         print(f"\n  Fase 1 — Entrenamiento con MobileNetV2 congelada")
@@ -78,9 +77,6 @@ def cross_validate(X, y, build_model_fn, get_callbacks_fn):
             callbacks=callbacks,
             verbose=0,
         )
-
-        from model import unfreeze_top_layers
-        from callbacks import get_callbacks_fase2
 
         print(f"\n  Fase 2 — Fine-tuning")
         model = unfreeze_top_layers(model)
@@ -115,8 +111,6 @@ def cross_validate(X, y, build_model_fn, get_callbacks_fn):
 
 # -------------------------------------------------------------
 #  Reporte de metricas por fold y promedio final
-#  Precision, Recall, F1 por clase
-#  Accuracy promedio con desviacion estandar
 # -------------------------------------------------------------
 
 def report_metrics(resultados):
@@ -138,6 +132,7 @@ def report_metrics(resultados):
                 r["y_pred"],
                 target_names=GESTURES,
                 digits=4,
+                zero_division=0,
             )
         )
 
@@ -145,7 +140,7 @@ def report_metrics(resultados):
     std_acc  = np.std(accuracies)
 
     print(f"\n{'='*60}")
-    print(f"  Accuracy promedio : {mean_acc:.4f}")
+    print(f"  Accuracy promedio   : {mean_acc:.4f}")
     print(f"  Desviacion estandar : {std_acc:.4f}")
     print(f"{'='*60}")
 
@@ -154,8 +149,6 @@ def report_metrics(resultados):
 
 # -------------------------------------------------------------
 #  Matriz de confusion agregada
-#  Suma las predicciones de todos los folds
-#  Guarda la imagen en MODEL_DIR
 # -------------------------------------------------------------
 
 def plot_confusion_matrix(resultados):
@@ -164,10 +157,12 @@ def plot_confusion_matrix(resultados):
     cm_total = np.zeros((NUM_CLASSES, NUM_CLASSES), dtype=int)
 
     for r in resultados:
-        cm = confusion_matrix(r["y_true"], r["y_pred"])
+        cm = confusion_matrix(r["y_true"], r["y_pred"], labels=range(NUM_CLASSES))
         cm_total += cm
 
-    cm_norm = cm_total.astype(float) / cm_total.sum(axis=1, keepdims=True)
+    row_sums = cm_total.sum(axis=1, keepdims=True)
+    row_sums[row_sums == 0] = 1
+    cm_norm = cm_total.astype(float) / row_sums
 
     fig, ax = plt.subplots(figsize=(12, 10))
 
@@ -185,7 +180,7 @@ def plot_confusion_matrix(resultados):
         vmax=1.0,
     )
 
-    ax.set_title("Matriz de confusion — gestflow (5-Fold agregado)", fontsize=14, pad=16)
+    ax.set_title("Matriz de confusion — gestflow (Folds agregados)", fontsize=14, pad=16)
     ax.set_xlabel("Prediccion", fontsize=12)
     ax.set_ylabel("Clase real", fontsize=12)
     plt.xticks(rotation=45, ha="right", fontsize=10)
@@ -201,8 +196,6 @@ def plot_confusion_matrix(resultados):
 
 # -------------------------------------------------------------
 #  Curvas de entrenamiento por fold
-#  Loss y accuracy — fase 1 y fase 2 (fine-tuning)
-#  Guarda una imagen por fold en MODEL_DIR
 # -------------------------------------------------------------
 
 def plot_training_curves(resultados):
@@ -213,28 +206,30 @@ def plot_training_curves(resultados):
         history    = r["history"].history
         history_ft = r["history_ft"].history
 
-        loss_total     = history["loss"]     + history_ft["loss"]
-        val_loss_total = history["val_loss"] + history_ft["val_loss"]
-        acc_total      = history["accuracy"] + history_ft["accuracy"]
+        loss_total     = history["loss"]         + history_ft["loss"]
+        val_loss_total = history["val_loss"]     + history_ft["val_loss"]
+        acc_total      = history["accuracy"]     + history_ft["accuracy"]
         val_acc_total  = history["val_accuracy"] + history_ft["val_accuracy"]
 
-        epocas         = range(1, len(loss_total) + 1)
-        ft_inicio      = len(history["loss"])
+        epocas    = range(1, len(loss_total) + 1)
+        ft_inicio = len(history["loss"])
 
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
 
-        ax1.plot(epocas, loss_total,     label="Train loss",      color="steelblue")
-        ax1.plot(epocas, val_loss_total, label="Val loss",        color="coral")
-        ax1.axvline(x=ft_inicio, color="gray", linestyle="--", linewidth=1, label="Fine-tuning")
+        ax1.plot(epocas, loss_total,     label="Train loss", color="steelblue")
+        ax1.plot(epocas, val_loss_total, label="Val loss",   color="coral")
+        ax1.axvline(x=ft_inicio, color="gray", linestyle="--",
+                    linewidth=1, label="Fine-tuning")
         ax1.set_title(f"Loss — Fold {fold}", fontsize=12)
         ax1.set_xlabel("Epoca")
         ax1.set_ylabel("Loss")
         ax1.legend()
         ax1.grid(True, alpha=0.3)
 
-        ax2.plot(epocas, acc_total,     label="Train accuracy",   color="steelblue")
-        ax2.plot(epocas, val_acc_total, label="Val accuracy",     color="coral")
-        ax2.axvline(x=ft_inicio, color="gray", linestyle="--", linewidth=1, label="Fine-tuning")
+        ax2.plot(epocas, acc_total,     label="Train accuracy", color="steelblue")
+        ax2.plot(epocas, val_acc_total, label="Val accuracy",   color="coral")
+        ax2.axvline(x=ft_inicio, color="gray", linestyle="--",
+                    linewidth=1, label="Fine-tuning")
         ax2.set_title(f"Accuracy — Fold {fold}", fontsize=12)
         ax2.set_xlabel("Epoca")
         ax2.set_ylabel("Accuracy")
@@ -253,7 +248,6 @@ def plot_training_curves(resultados):
 
 # -------------------------------------------------------------
 #  Evaluacion final sobre el test set
-#  Se usa el modelo final entrenado con todos los datos
 # -------------------------------------------------------------
 
 def evaluate_test_set(model, X_test, y_test):
@@ -273,11 +267,14 @@ def evaluate_test_set(model, X_test, y_test):
             y_pred,
             target_names=GESTURES,
             digits=4,
+            zero_division=0,
         )
     )
 
-    cm = confusion_matrix(y_test, y_pred)
-    cm_norm = cm.astype(float) / cm.sum(axis=1, keepdims=True)
+    cm = confusion_matrix(y_test, y_pred, labels=range(NUM_CLASSES))
+    row_sums = cm.sum(axis=1, keepdims=True)
+    row_sums[row_sums == 0] = 1
+    cm_norm = cm.astype(float) / row_sums
 
     fig, ax = plt.subplots(figsize=(12, 10))
     sns.heatmap(

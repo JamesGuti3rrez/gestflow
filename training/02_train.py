@@ -10,7 +10,6 @@
 
 import os
 import sys
-import numpy as np
 import time
 
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
@@ -74,14 +73,11 @@ def fase_1_carga():
 
 
 # -------------------------------------------------------------
-#  Fase 2 — Validacion cruzada 5-fold
-#  Entrena un modelo por fold con augmentation
-#  Fase 1 de cada fold: MobileNetV2 congelada
-#  Fase 2 de cada fold: Fine-tuning ultimas capas
+#  Fase 2 — Validacion cruzada
 # -------------------------------------------------------------
 
 def fase_2_cross_validation(X, y):
-    separador("FASE 2 — VALIDACION CRUZADA 5-FOLD")
+    separador(f"FASE 2 — VALIDACION CRUZADA {KFOLD_SPLITS}-FOLD")
 
     resultados = cross_validate(
         X=X,
@@ -111,9 +107,6 @@ def fase_3_reporte(resultados):
 
 # -------------------------------------------------------------
 #  Fase 4 — Entrenamiento final con todos los datos
-#  Aplica augmentation al dataset completo de entrenamiento
-#  Entrena el modelo final en dos fases
-#  Guarda el modelo en MODEL_PATH
 # -------------------------------------------------------------
 
 def fase_4_entrenamiento_final(X_train, X_val, X_test,
@@ -212,10 +205,10 @@ def main():
 
     guardar_modelo(model)
 
-    fin     = time.time()
-    elapsed = fin - inicio
-    horas   = int(elapsed // 3600)
-    minutos = int((elapsed % 3600) // 60)
+    fin      = time.time()
+    elapsed  = fin - inicio
+    horas    = int(elapsed // 3600)
+    minutos  = int((elapsed % 3600) // 60)
     segundos = int(elapsed % 60)
 
     separador("ENTRENAMIENTO COMPLETADO")

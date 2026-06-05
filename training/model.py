@@ -35,14 +35,12 @@ from config import (
     DROPOUT_RATE,
     MOBILENET_ALPHA,
     LEARNING_RATE,
+    FINE_TUNING_LAYERS,
 )
 
 
 # -------------------------------------------------------------
 #  Construccion del extractor CNN
-#  MobileNetV2 preentrenada en ImageNet
-#  Se congela completamente en la fase inicial
-#  Solo el GlobalAveragePooling2D se agrega encima
 # -------------------------------------------------------------
 
 def build_cnn_extractor():
@@ -63,22 +61,6 @@ def build_cnn_extractor():
 
 # -------------------------------------------------------------
 #  Construccion del modelo completo
-#  Entrada : (FRAME_COUNT, FRAME_HEIGHT, FRAME_WIDTH, FRAME_CHANNELS)
-#  Salida  : (NUM_CLASSES,) probabilidades Softmax
-#
-#  Arquitectura:
-#  Input
-#    -> TimeDistributed(MobileNetV2 + GAP)
-#    -> Masking
-#    -> LSTM(LSTM_UNITS_1, return_sequences=True)
-#    -> Dropout
-#    -> BatchNormalization
-#    -> LSTM(LSTM_UNITS_2, return_sequences=False)
-#    -> Dropout
-#    -> BatchNormalization
-#    -> Dense(DENSE_UNITS, relu)
-#    -> Dropout
-#    -> Dense(NUM_CLASSES, softmax)
 # -------------------------------------------------------------
 
 def build_model():
@@ -127,14 +109,26 @@ def build_model():
 
 # -------------------------------------------------------------
 #  Fine-tuning
-#  Descongela las ultimas capas de MobileNetV2
-#  Se llama despues de la fase inicial de entrenamiento
-#  Reduce el learning rate para no destruir los pesos
+#  Detecta la capa MobileNetV2 dinamicamente por nombre
+#  Funciona con cualquier FRAME_WIDTH configurado
 # -------------------------------------------------------------
 
-def unfreeze_top_layers(model, n_layers=30):
+def unfreeze_top_layers(model, n_layers=None):
+    if n_layers is None:
+        n_layers = FINE_TUNING_LAYERS
+
     cnn_extractor = model.get_layer("feature_extractor").layer
-    base_model    = cnn_extractor.get_layer("mobilenetv2_1.00_224")
+
+    base_model = None
+    for layer in cnn_extractor.layers:
+        if "mobilenetv2" in layer.name.lower():
+            base_model = layer
+            break
+
+    if base_model is None:
+        raise ValueError(
+            "No se encontro la capa MobileNetV2 dentro del extractor"
+        )
 
     for layer in base_model.layers:
         layer.trainable = False
@@ -149,27 +143,23 @@ def unfreeze_top_layers(model, n_layers=30):
     )
 
     print(f"\nFine-tuning activado:")
-    print(f"  Ultimas {n_layers} capas de MobileNetV2 descongeladas")
-    print(f"  Learning rate reducido a {LEARNING_RATE / 10:.6f}")
+    print(f"  Capa CNN detectada         : {base_model.name}")
+    print(f"  Ultimas {n_layers} capas descongeladas")
+    print(f"  Learning rate reducido a   : {LEARNING_RATE / 10:.6f}")
 
     return model
 
 
 # -------------------------------------------------------------
 #  Resumen del modelo
-#  Muestra parametros entrenables y no entrenables
 # -------------------------------------------------------------
 
 def model_summary(model):
     print("\nResumen del modelo gestflow:")
     model.summary()
 
-    trainable     = sum(
-        tf.size(w).numpy() for w in model.trainable_weights
-    )
-    no_trainable  = sum(
-        tf.size(w).numpy() for w in model.non_trainable_weights
-    )
+    trainable    = sum(tf.size(w).numpy() for w in model.trainable_weights)
+    no_trainable = sum(tf.size(w).numpy() for w in model.non_trainable_weights)
 
     print(f"\n  Parametros entrenables     : {trainable:,}")
     print(f"  Parametros no entrenables  : {no_trainable:,}")
