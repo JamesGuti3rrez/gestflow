@@ -21,11 +21,12 @@ from config import (
     RECORD_WIDTH,
     RECORD_HEIGHT,
     VIDEO_FPS,
-    GESTURES,
+    TRAIN_CLASSES,
     NEUTRAL_CLASS,
     MODEL_PATH,
     CONFIDENCE_THRESHOLD,
     DETECTION_FLOOR,
+    PREDICTION_MARGIN,
     ACTION_COOLDOWN,
     INFERENCE_INTERVAL,
     VOTING_WINDOW,
@@ -145,11 +146,24 @@ class GestureRecognizer:
         predicciones = self.model.predict(tensor, verbose=0)[0]
         clase_idx    = int(np.argmax(predicciones))
         precision    = float(predicciones[clase_idx])
-        gesto        = GESTURES[clase_idx]
+        gesto        = TRAIN_CLASSES[clase_idx]
+
+        # Margen entre la clase ganadora y la segunda mas probable.
+        # El modelo ya tiene una clase NEUTRAL entrenada (mano ausente,
+        # fondo en movimiento); este margen es una defensa adicional:
+        # si las dos clases mas probables estan empatadas, la prediccion
+        # no es de fiar y se rechaza para evitar acciones espurias.
+        if len(predicciones) > 1:
+            top2   = np.partition(predicciones, -2)[-2]
+            margen = precision - float(top2)
+        else:
+            margen = precision
 
         self.ultima_precision = precision
 
         if gesto == NEUTRAL_CLASS or precision < DETECTION_FLOOR:
+            self.votos.append(None)
+        elif margen < PREDICTION_MARGIN:
             self.votos.append(None)
         elif precision >= CONFIDENCE_THRESHOLD:
             self.votos.append(gesto)

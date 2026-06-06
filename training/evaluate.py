@@ -19,7 +19,7 @@ from sklearn.metrics import (
 
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 from config import (
-    GESTURES,
+    TRAIN_CLASSES,
     NUM_CLASSES,
     KFOLD_SPLITS,
     EPOCHS,
@@ -130,7 +130,7 @@ def report_metrics(resultados):
             classification_report(
                 r["y_true"],
                 r["y_pred"],
-                target_names=GESTURES,
+                target_names=TRAIN_CLASSES,
                 digits=4,
                 zero_division=0,
             )
@@ -171,8 +171,8 @@ def plot_confusion_matrix(resultados):
         annot=True,
         fmt=".2f",
         cmap="Blues",
-        xticklabels=GESTURES,
-        yticklabels=GESTURES,
+        xticklabels=TRAIN_CLASSES,
+        yticklabels=TRAIN_CLASSES,
         ax=ax,
         linewidths=0.5,
         linecolor="gray",
@@ -282,8 +282,8 @@ def evaluate_test_set(model, X_test, y_test):
         annot=True,
         fmt=".2f",
         cmap="Blues",
-        xticklabels=GESTURES,
-        yticklabels=GESTURES,
+        xticklabels=TRAIN_CLASSES,
+        yticklabels=TRAIN_CLASSES,
         ax=ax,
         linewidths=0.5,
         linecolor="gray",

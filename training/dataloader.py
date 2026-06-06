@@ -13,7 +13,7 @@ from tqdm import tqdm
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 from config import (
     DATASET_DIR,
-    GESTURES,
+    TRAIN_CLASSES,
     NUM_CLASSES,
     FRAME_COUNT,
     FRAME_HEIGHT,
@@ -74,7 +74,7 @@ def verify_dataset():
         errores.append(f"No se encontro el directorio del dataset: {DATASET_DIR}")
         return False, errores
 
-    for gesto in GESTURES:
+    for gesto in TRAIN_CLASSES:
         gesto_dir = os.path.join(DATASET_DIR, gesto)
         if not os.path.exists(gesto_dir):
             errores.append(f"Falta la carpeta: {gesto}")
@@ -113,7 +113,7 @@ def load_dataset():
 
     print("\nCargando dataset...")
 
-    for clase_idx, gesto in enumerate(GESTURES):
+    for clase_idx, gesto in enumerate(TRAIN_CLASSES):
         gesto_dir = os.path.join(DATASET_DIR, gesto)
         videos    = sorted([
             f for f in os.listdir(gesto_dir)
@@ -163,7 +163,7 @@ def dataset_summary():
     print(f"  {'-'*20} {'-'*8}")
 
     total = 0
-    for gesto in GESTURES:
+    for gesto in TRAIN_CLASSES:
         gesto_dir = os.path.join(DATASET_DIR, gesto)
         videos    = [
             f for f in os.listdir(gesto_dir)

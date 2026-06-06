@@ -36,8 +36,18 @@ GESTURES = [
     "OPEN_APP",
 ]
 
-NUM_CLASSES   = len(GESTURES)
 NEUTRAL_CLASS = "NEUTRAL"
+
+# Clases que el modelo realmente aprende a distinguir.
+# GESTURES son los 9 gestos accionables; NEUTRAL es la clase "no hay
+# gesto" (mano ausente, fondo en movimiento, cara, sombras). El modelo
+# debe poder responder NEUTRAL en vez de verse obligado a elegir un
+# gesto cuando no hay mano. El orden define el indice de cada clase en
+# la salida softmax; NEUTRAL va al final para no alterar los indices
+# de los gestos ya grabados.
+TRAIN_CLASSES = GESTURES + [NEUTRAL_CLASS]
+
+NUM_CLASSES   = len(TRAIN_CLASSES)
 
 # -------------------------------------------------------------
 #  Parametros de video y frames
@@ -136,6 +146,27 @@ CONFIDENCE_THRESHOLD = 0.75
 DETECTION_FLOOR      = 0.55
 ACTION_COOLDOWN      = 0.4
 INFERENCE_INTERVAL   = 3
+
+# Margen minimo entre la clase ganadora y la segunda mas probable.
+# Si el modelo duda entre dos gestos (margen pequeno) se rechaza la
+# prediccion. Segunda linea de defensa ademas de la clase NEUTRAL
+# entrenada: mitiga falsos positivos cuando dos gestos quedan empatados.
+PREDICTION_MARGIN    = 0.20
+
+# -------------------------------------------------------------
+#  Seguridad
+# -------------------------------------------------------------
+
+# Red de seguridad de pyautogui: llevar el cursor a una esquina
+# de la pantalla aborta cualquier accion en curso. Mantener en True.
+PYAUTOGUI_FAILSAFE = True
+
+# Boton de panico global (funciona aunque el overlay no tenga foco).
+# Pausa/reanuda el sistema y suelta el raton inmediatamente.
+PANIC_HOTKEY = "ctrl+alt+p"
+
+# Apagado de emergencia global: cierra el sistema por completo.
+KILL_HOTKEY  = "ctrl+alt+q"
 
 # -------------------------------------------------------------
 #  Buffer de votacion

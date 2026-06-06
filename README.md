@@ -177,10 +177,36 @@ Ningun otro archivo tiene valores hardcodeados.
     LEARNING_RATE          0.001       Learning rate inicial
     AUGMENTATION_FACTOR    6           Multiplicador del dataset
     CONFIDENCE_THRESHOLD   0.75        Precision minima para ejecutar accion
+    PREDICTION_MARGIN      0.20        Margen minimo entre top-1 y top-2 (rechazo)
     ACTION_COOLDOWN        0.5         Segundos entre acciones consecutivas
     SCROLL_SPEED           3           Unidades de scroll por deteccion
     CURSOR_SMOOTHING       7           Factor de suavizado del cursor
     DRAG_THRESHOLD         0.80        Precision minima especifica para DRAG
+    PYAUTOGUI_FAILSAFE     True        Esquina de pantalla aborta toda accion
+    PANIC_HOTKEY           ctrl+alt+p  Pausa global + suelta el raton
+    KILL_HOTKEY            ctrl+alt+q  Apagado de emergencia global
+
+---
+
+## Seguridad
+
+El sistema controla el raton y el teclado de forma automatica, por lo que
+incorpora varias salvaguardas:
+
+    Rechazo por margen    Si el modelo duda entre dos gestos (top-1 y top-2
+                          muy cercanos) la prediccion se descarta. Evita
+                          acciones espurias cuando no hay un gesto claro,
+                          ya que el modelo no tiene una clase NEUTRAL.
+
+    Failsafe pyautogui    Llevar el cursor a una esquina de la pantalla
+                          aborta cualquier accion en curso.
+
+    Hotkey de panico      ctrl+alt+p pausa el sistema y suelta el raton al
+                          instante, aunque la ventana no tenga el foco.
+
+    Hotkey de apagado     ctrl+alt+q cierra el sistema por completo.
+
+    Gestos PAUSE/SAFE     Pausan o restringen el sistema desde la propia mano.
 
 ---
 

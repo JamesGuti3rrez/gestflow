@@ -16,10 +16,13 @@ from config import (
     CURSOR_SPEED,
     CURSOR_DEAD_ZONE,
     DRAG_THRESHOLD,
+    PYAUTOGUI_FAILSAFE,
 )
 
 
-pyautogui.FAILSAFE = False
+# Failsafe activado: llevar el cursor a una esquina aborta la accion.
+# Es la red de seguridad estandar de pyautogui ante un descontrol.
+pyautogui.FAILSAFE = PYAUTOGUI_FAILSAFE
 pyautogui.PAUSE    = 0.0
 
 
@@ -60,11 +63,15 @@ class MouseController:
             "PAUSE", "SAFE_MODE", "OPEN_APP"
         }
 
-        if gesto in gestos_continuos:
-            self._ejecutar_continuo(gesto, precision, direccion)
-        elif gesto in gestos_discretos:
-            if puede_discreto:
-                self._ejecutar_discreto(gesto, precision)
+        try:
+            if gesto in gestos_continuos:
+                self._ejecutar_continuo(gesto, precision, direccion)
+            elif gesto in gestos_discretos:
+                if puede_discreto:
+                    self._ejecutar_discreto(gesto, precision)
+        except pyautogui.FailSafeException:
+            # El usuario llevo el cursor a una esquina: abortar todo.
+            self.parada_emergencia()
 
         self.ultimo_gesto = gesto
 
@@ -236,6 +243,35 @@ class MouseController:
     def _resetear_direccion(self):
         self.dx_anterior = 0.0
         self.dy_anterior = 0.0
+
+    # ---------------------------------------------------------
+    #  Parada de emergencia
+    #  Suelta el boton si estaba arrastrando y pausa el sistema.
+    #  Pensado para el hotkey global de panico y el failsafe.
+    # ---------------------------------------------------------
+
+    def parada_emergencia(self):
+        if self.en_drag:
+            try:
+                pyautogui.mouseUp(button="left")
+            except Exception:
+                pass
+            self.en_drag = False
+        self.sistema_pausado = True
+        self._resetear_direccion()
+        print("  PARADA DE EMERGENCIA — sistema pausado.")
+
+    def alternar_pausa(self):
+        if self.en_drag:
+            try:
+                pyautogui.mouseUp(button="left")
+            except Exception:
+                pass
+            self.en_drag = False
+        self.sistema_pausado = not self.sistema_pausado
+        self._resetear_direccion()
+        estado = "PAUSADO" if self.sistema_pausado else "ACTIVO"
+        print(f"  Sistema {estado} (hotkey)")
 
     def liberar(self):
         if self.en_drag:

@@ -16,6 +16,8 @@ from config import (
     GESTURES,
     NUM_CLASSES,
     CONFIDENCE_THRESHOLD,
+    PANIC_HOTKEY,
+    KILL_HOTKEY,
 )
 
 from gesture_recognizer import (
@@ -26,6 +28,45 @@ from gesture_recognizer import (
 )
 from mouse_controller import MouseController
 from overlay          import Overlay
+
+
+# Bandera global de apagado de emergencia, activada por el hotkey KILL.
+solicitud_apagado = {"activo": False}
+
+
+def registrar_hotkeys_globales(controller):
+    # Hotkeys de seguridad que funcionan aunque el overlay no tenga foco.
+    # Si la captura global falla (p. ej. sin permisos), el sistema sigue
+    # operando con ESC sobre la ventana como salida.
+    try:
+        import keyboard
+    except Exception as e:
+        print(f"  Aviso: hotkeys globales no disponibles ({e}).")
+        print("  Usa ESC sobre la ventana o el gesto PAUSE.")
+        return
+
+    def _panico():
+        controller.parada_emergencia()
+
+    def _kill():
+        controller.parada_emergencia()
+        solicitud_apagado["activo"] = True
+
+    try:
+        keyboard.add_hotkey(PANIC_HOTKEY, _panico)
+        keyboard.add_hotkey(KILL_HOTKEY,  _kill)
+        print(f"  Hotkey de panico  : {PANIC_HOTKEY} (pausa + suelta raton)")
+        print(f"  Hotkey de apagado : {KILL_HOTKEY}")
+    except Exception as e:
+        print(f"  Aviso: no se pudieron registrar hotkeys globales ({e}).")
+
+
+def liberar_hotkeys_globales():
+    try:
+        import keyboard
+        keyboard.unhook_all_hotkeys()
+    except Exception:
+        pass
 
 
 def separador(titulo=""):
@@ -64,6 +105,9 @@ def inicializar():
     print("\n  Iniciando overlay...")
     overlay = Overlay()
     overlay.iniciar()
+
+    print("\n  Registrando hotkeys de seguridad...")
+    registrar_hotkeys_globales(controller)
 
     separador("Sistema listo")
     print("\n  Realiza un gesto frente a la camara.")
@@ -117,6 +161,10 @@ def loop_principal(camara, recognizer, controller, overlay):
             print("\n  ESC presionado. Cerrando sistema...")
             break
 
+        if solicitud_apagado["activo"]:
+            print("\n  Apagado de emergencia solicitado. Cerrando sistema...")
+            break
+
         frames_totales += 1
 
         t_espera = intervalo - (time.time() - t_inicio_frame)
@@ -130,6 +178,8 @@ def loop_principal(camara, recognizer, controller, overlay):
 def liberar_recursos(camara, controller, overlay):
     separador("Cerrando sistema")
     print("\n  Liberando recursos...")
+
+    liberar_hotkeys_globales()
 
     if controller is not None:
         try:

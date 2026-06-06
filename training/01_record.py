@@ -17,7 +17,8 @@ import time
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 from config import (
     DATASET_DIR,
-    GESTURES,
+    TRAIN_CLASSES,
+    NEUTRAL_CLASS,
     CAMERA_INDEX,
     VIDEO_FPS,
     VIDEO_DURATION,
@@ -72,7 +73,7 @@ def draw_text(frame, texto, pos, color=COLOR_WHITE,
 #  Dibuja el recuadro de la zona de grabacion
 # -------------------------------------------------------------
 
-def dibujar_roi(frame, grabando=False):
+def dibujar_roi(frame, grabando=False, gesto=None):
     color = RECORDING_COLOR if grabando else COLOR_YELLOW
     grosor = 3
 
@@ -89,7 +90,11 @@ def dibujar_roi(frame, grabando=False):
     cv2.line(frame, (ROI_X2, ROI_Y2), (ROI_X2, ROI_Y2 - esquina), color, grosor + 1)
 
     if not grabando:
-        draw_text(frame, "PON TU MANO AQUI",
+        if gesto == NEUTRAL_CLASS:
+            texto = "NEUTRAL: NO pongas la mano"
+        else:
+            texto = "PON TU MANO AQUI"
+        draw_text(frame, texto,
                   (ROI_X1 + 10, ROI_Y1 + 30),
                   COLOR_YELLOW, scale=0.6)
 
@@ -111,7 +116,7 @@ def recortar_roi(frame):
 # -------------------------------------------------------------
 
 def crear_carpetas():
-    for gesto in GESTURES:
+    for gesto in TRAIN_CLASSES:
         path = os.path.join(DATASET_DIR, gesto)
         os.makedirs(path, exist_ok=True)
     print("  Carpetas del dataset verificadas.")
@@ -163,7 +168,7 @@ def pantalla_bienvenida(cap):
         frame = cv2.flip(frame, 1)
         h, w  = frame.shape[:2]
 
-        overlay_h = min(60 + len(GESTURES) * 36 + 60, h)
+        overlay_h = min(60 + len(TRAIN_CLASSES) * 36 + 60, h)
         panel     = frame.copy()
         cv2.rectangle(panel, (0, 0), (w, overlay_h), COLOR_BLACK, -1)
         cv2.addWeighted(panel, 0.6, frame, 0.4, 0, frame)
@@ -171,7 +176,7 @@ def pantalla_bienvenida(cap):
         draw_text(frame, f"gestflow — Grabacion ({RECORDER_NAME})",
                   (20, 36), COLOR_YELLOW, scale=0.8)
 
-        for i, gesto in enumerate(GESTURES):
+        for i, gesto in enumerate(TRAIN_CLASSES):
             count  = contar_videos(gesto)
             estado = f"{count:3d} / {VIDEOS_PER_GESTURE}"
             color  = READY_COLOR if count >= VIDEOS_PER_GESTURE else COLOR_WHITE
@@ -206,7 +211,7 @@ def pantalla_gesto(cap, gesto, numero, total):
         frame = cv2.flip(frame, 1)
         h, w  = frame.shape[:2]
 
-        dibujar_roi(frame)
+        dibujar_roi(frame, gesto=gesto)
 
         panel = frame.copy()
         cv2.rectangle(panel, (0, 0), (w, 150), COLOR_BLACK, -1)
@@ -219,9 +224,12 @@ def pantalla_gesto(cap, gesto, numero, total):
         draw_text(frame,
                   "ESPACIO grabar  |  S saltar  |  ESC salir",
                   (20, 108), COLOR_YELLOW, scale=0.55)
-        draw_text(frame,
-                  "Manten la mano dentro del recuadro amarillo",
-                  (20, h - 20), COLOR_YELLOW, scale=0.55)
+
+        if gesto == NEUTRAL_CLASS:
+            tip = "NEUTRAL: recuadro SIN mano (fondo, cara, sombras, movimiento)"
+        else:
+            tip = "Manten la mano dentro del recuadro amarillo"
+        draw_text(frame, tip, (20, h - 20), COLOR_YELLOW, scale=0.55)
 
         cv2.imshow("gestflow — grabacion", frame)
         key = cv2.waitKey(1) & 0xFF
@@ -249,7 +257,7 @@ def cuenta_regresiva(cap, gesto):
             frame = cv2.flip(frame, 1)
             h, w  = frame.shape[:2]
 
-            dibujar_roi(frame)
+            dibujar_roi(frame, gesto=gesto)
 
             draw_text(frame, f"Gesto : {gesto}",
                       (20, 40), COLOR_YELLOW, scale=0.9)
@@ -367,7 +375,7 @@ def resumen_final():
     total_grabados  = 0
     total_faltantes = 0
 
-    for gesto in GESTURES:
+    for gesto in TRAIN_CLASSES:
         grabados        = contar_videos(gesto)
         faltantes       = max(0, VIDEOS_PER_GESTURE - grabados)
         total_grabados  += grabados
@@ -420,7 +428,7 @@ def main():
         cv2.destroyAllWindows()
         return
 
-    for gesto in GESTURES:
+    for gesto in TRAIN_CLASSES:
         videos_existentes = contar_videos(gesto)
 
         if videos_existentes >= VIDEOS_PER_GESTURE:
