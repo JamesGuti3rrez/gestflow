@@ -23,6 +23,7 @@ from config import (
     KFOLD_SPLITS,
     EPOCHS,
     BATCH_SIZE,
+    AUGMENTATION_FACTOR,
 )
 
 from dataloader   import load_dataset, split_dataset, dataset_summary
@@ -113,10 +114,13 @@ def fase_4_entrenamiento_final(X_train, X_val, X_test,
                                y_train, y_val, y_test):
     separador("FASE 4 — ENTRENAMIENTO FINAL")
 
-    print("\n  Aplicando data augmentation al set de entrenamiento...")
-    X_train_aug, y_train_aug = augment_dataset(X_train, y_train)
+    from augmentation import AugmentationGenerator
 
-    print(f"  Muestras entrenamiento (aumentadas) : {len(X_train_aug)}")
+    print(f"\n  Creando generador de augmentation...")
+    generador = AugmentationGenerator(X_train, y_train)
+
+    print(f"  Muestras entrenamiento (aumentadas) : {len(X_train) * AUGMENTATION_FACTOR}")
+    print(f"  Batches por epoch                   : {len(generador)}")
     print(f"  Muestras validacion                 : {len(X_val)}")
     print(f"  Muestras test                       : {len(X_test)}")
 
@@ -127,10 +131,9 @@ def fase_4_entrenamiento_final(X_train, X_val, X_test,
     callbacks_fase1 = get_callbacks_fase1(fold=None)
 
     model.fit(
-        X_train_aug, y_train_aug,
+        generador,
         validation_data=(X_val, y_val),
         epochs=EPOCHS,
-        batch_size=BATCH_SIZE,
         callbacks=callbacks_fase1,
         verbose=0,
     )
@@ -139,11 +142,12 @@ def fase_4_entrenamiento_final(X_train, X_val, X_test,
     model = unfreeze_top_layers(model)
     callbacks_fase2 = get_callbacks_fase2(fold=None)
 
+    generador_ft = AugmentationGenerator(X_train, y_train)
+
     model.fit(
-        X_train_aug, y_train_aug,
+        generador_ft,
         validation_data=(X_val, y_val),
         epochs=EPOCHS // 2,
-        batch_size=BATCH_SIZE,
         callbacks=callbacks_fase2,
         verbose=0,
     )

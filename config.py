@@ -59,7 +59,7 @@ FRAME_HEIGHT       = 112
 FRAME_CHANNELS     = 3
 VIDEO_FPS          = 30
 VIDEO_DURATION     = 2.5
-VIDEOS_PER_GESTURE = 60
+VIDEOS_PER_GESTURE = 140
 RECORD_WIDTH       = 640
 RECORD_HEIGHT      = 480
 
@@ -142,16 +142,16 @@ FONT_THICKNESS    = 2
 #  Parametros de inferencia en tiempo real
 # -------------------------------------------------------------
 
-CONFIDENCE_THRESHOLD = 0.75
+CONFIDENCE_THRESHOLD = 0.70
 DETECTION_FLOOR      = 0.55
-ACTION_COOLDOWN      = 0.4
-INFERENCE_INTERVAL   = 3
+ACTION_COOLDOWN      = 0.8
+INFERENCE_INTERVAL   = 4
 
 # Margen minimo entre la clase ganadora y la segunda mas probable.
 # Si el modelo duda entre dos gestos (margen pequeno) se rechaza la
 # prediccion. Segunda linea de defensa ademas de la clase NEUTRAL
 # entrenada: mitiga falsos positivos cuando dos gestos quedan empatados.
-PREDICTION_MARGIN    = 0.20
+PREDICTION_MARGIN    = 0.15
 
 # -------------------------------------------------------------
 #  Seguridad
@@ -173,7 +173,7 @@ KILL_HOTKEY  = "ctrl+alt+q"
 # -------------------------------------------------------------
 
 VOTING_WINDOW    = 5
-VOTING_THRESHOLD = 3
+VOTING_THRESHOLD = 2
 
 # -------------------------------------------------------------
 #  Movimiento del cursor
@@ -189,8 +189,8 @@ DRAG_THRESHOLD   = 0.80
 #  Parametros de la ventana flotante (overlay)
 # -------------------------------------------------------------
 
-OVERLAY_WIDTH       = 640
-OVERLAY_HEIGHT      = 500
+OVERLAY_WIDTH       = 480
+OVERLAY_HEIGHT      = 480
 OVERLAY_WINDOW_NAME = "gestflow"
 OVERLAY_FPS         = 60
 BAR_COLOR_HIGH      = (100, 200, 100)

@@ -1,11 +1,14 @@
 # =============================================================
 #  gestflow — app/main.py
 #  Punto de entrada principal del sistema
+#  La inferencia corre en un hilo separado para no bloquear
+#  el loop principal de captura y renderizado
 # =============================================================
 
 import os
 import sys
 import time
+import threading
 
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.append(os.path.dirname(__file__))
@@ -29,15 +32,67 @@ from gesture_recognizer import (
 from mouse_controller import MouseController
 from overlay          import Overlay
 
-
-# Bandera global de apagado de emergencia, activada por el hotkey KILL.
 solicitud_apagado = {"activo": False}
 
 
+# -------------------------------------------------------------
+#  Hilo de inferencia
+#  Corre en paralelo al loop principal
+#  Lee el buffer del recognizer, infiere y ejecuta la accion
+# -------------------------------------------------------------
+
+class HiloInferencia(threading.Thread):
+
+    def __init__(self, recognizer, controller):
+        super().__init__(daemon=True)
+        self.recognizer       = recognizer
+        self.controller       = controller
+        self.activo           = True
+        self.acciones_totales = 0
+
+    def run(self):
+        ultimo_movimiento  = 0.0
+        ultimo_gesto_exec  = None  # rastrea el ultimo gesto discreto ejecutado
+
+        while self.activo:
+            if self.recognizer.listo:
+                gesto, precision = self.recognizer.inferir()
+                ahora = time.time()
+
+                if gesto is not None:
+                    if gesto in {"MOVE_CURSOR", "DRAG", "SCROLL"}:
+                        ultimo_gesto_exec = None  # resetea al cambiar a continuo
+                        if ahora - ultimo_movimiento >= 0.03:
+                            direccion = self.recognizer.calcular_direccion()
+                            self.controller.ejecutar(
+                                gesto, precision, direccion, False
+                            )
+                            ultimo_movimiento = ahora
+                    else:
+                        # Solo ejecuta si es un gesto distinto al anterior
+                        if gesto != ultimo_gesto_exec:
+                            puede_discreto = self.recognizer.puede_ejecutar_discreto()
+                            if puede_discreto:
+                                self.controller.ejecutar(
+                                    gesto, precision, (0.0, 0.0), True
+                                )
+                                self.acciones_totales += 1
+                                ultimo_gesto_exec = gesto
+                else:
+                    # Sin gesto confirmado, resetea para permitir el siguiente
+                    ultimo_gesto_exec = None
+
+            gesto_actual = self.recognizer.gesto_confirmado
+            if gesto_actual in {"MOVE_CURSOR", "DRAG", "SCROLL"}:
+                time.sleep(0.01)
+            else:
+                time.sleep(0.05)
+
+    def detener(self):
+        self.activo = False
+
+
 def registrar_hotkeys_globales(controller):
-    # Hotkeys de seguridad que funcionan aunque el overlay no tenga foco.
-    # Si la captura global falla (p. ej. sin permisos), el sistema sigue
-    # operando con ESC sobre la ventana como salida.
     try:
         import keyboard
     except Exception as e:
@@ -55,10 +110,10 @@ def registrar_hotkeys_globales(controller):
     try:
         keyboard.add_hotkey(PANIC_HOTKEY, _panico)
         keyboard.add_hotkey(KILL_HOTKEY,  _kill)
-        print(f"  Hotkey de panico  : {PANIC_HOTKEY} (pausa + suelta raton)")
+        print(f"  Hotkey de panico  : {PANIC_HOTKEY}")
         print(f"  Hotkey de apagado : {KILL_HOTKEY}")
     except Exception as e:
-        print(f"  Aviso: no se pudieron registrar hotkeys globales ({e}).")
+        print(f"  Aviso: no se pudieron registrar hotkeys ({e}).")
 
 
 def liberar_hotkeys_globales():
@@ -120,85 +175,80 @@ def inicializar():
 
 
 def loop_principal(camara, recognizer, controller, overlay):
-    intervalo        = 1.0 / OVERLAY_FPS
-    tiempo_inicio    = time.time()
-    frames_totales   = 0
-    acciones_totales = 0
+    intervalo      = 1.0 / OVERLAY_FPS
+    tiempo_inicio  = time.time()
+    frames_totales = 0
 
     overlay.actualizar_estado(None, 0.0, False, controller.estado())
 
-    while True:
-        t_inicio_frame = time.time()
+    # Inicia el hilo de inferencia
+    hilo = HiloInferencia(recognizer, controller)
+    hilo.start()
 
-        ret, frame = camara.leer()
-        if not ret:
-            print("\n  Error: No se pudo leer el frame de la camara.")
-            break
+    try:
+        while True:
+            t_inicio_frame = time.time()
 
-        buffer_listo = recognizer.agregar_frame(frame)
+            ret, frame = camara.leer()
+            if not ret:
+                print("\n  Error: No se pudo leer el frame de la camara.")
+                break
 
-        if buffer_listo:
-            gesto, precision = recognizer.inferir()
+            # El hilo principal solo agrega frames y renderiza
+            recognizer.agregar_frame(frame)
 
-            if gesto is not None:
-                direccion      = recognizer.calcular_direccion()
-                puede_discreto = recognizer.puede_ejecutar_discreto()
-                controller.ejecutar(gesto, precision, direccion, puede_discreto)
-                acciones_totales += 1
+            gesto_display, precision_display, hay_deteccion = recognizer.estado_actual()
+            estado_controller = controller.estado()
 
-        gesto_display, precision_display, hay_deteccion = recognizer.estado_actual()
-        estado_controller = controller.estado()
+            overlay.actualizar_estado(
+                gesto_display,
+                precision_display,
+                hay_deteccion,
+                estado_controller,
+            )
+            overlay.renderizar(frame)
 
-        overlay.actualizar_estado(
-            gesto_display,
-            precision_display,
-            hay_deteccion,
-            estado_controller,
-        )
-        overlay.renderizar(frame)
+            if overlay.verificar_salida():
+                print("\n  ESC presionado. Cerrando sistema...")
+                break
 
-        if overlay.verificar_salida():
-            print("\n  ESC presionado. Cerrando sistema...")
-            break
+            if solicitud_apagado["activo"]:
+                print("\n  Apagado de emergencia. Cerrando sistema...")
+                break
 
-        if solicitud_apagado["activo"]:
-            print("\n  Apagado de emergencia solicitado. Cerrando sistema...")
-            break
+            frames_totales += 1
 
-        frames_totales += 1
+            t_espera = intervalo - (time.time() - t_inicio_frame)
+            if t_espera > 0:
+                time.sleep(t_espera)
 
-        t_espera = intervalo - (time.time() - t_inicio_frame)
-        if t_espera > 0:
-            time.sleep(t_espera)
+    finally:
+        hilo.detener()
+        hilo.join(timeout=2.0)
 
     tiempo_total = time.time() - tiempo_inicio
-    return frames_totales, acciones_totales, tiempo_total
+    return frames_totales, hilo.acciones_totales, tiempo_total
 
 
 def liberar_recursos(camara, controller, overlay):
     separador("Cerrando sistema")
     print("\n  Liberando recursos...")
-
     liberar_hotkeys_globales()
-
     if controller is not None:
         try:
             controller.liberar()
         except Exception as e:
             print(f"  Error al liberar controller: {e}")
-
     if camara is not None:
         try:
             camara.liberar()
         except Exception as e:
             print(f"  Error al liberar camara: {e}")
-
     if overlay is not None:
         try:
             overlay.cerrar()
         except Exception as e:
             print(f"  Error al cerrar overlay: {e}")
-
     print("  Recursos liberados correctamente.")
 
 

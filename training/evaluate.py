@@ -19,12 +19,14 @@ from sklearn.metrics import (
 
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 from config import (
+    GESTURES,
     TRAIN_CLASSES,
     NUM_CLASSES,
     KFOLD_SPLITS,
     EPOCHS,
     BATCH_SIZE,
     MODEL_DIR,
+    AUGMENTATION_FACTOR,
 )
 
 
@@ -33,7 +35,7 @@ from config import (
 # -------------------------------------------------------------
 
 def cross_validate(X, y, build_model_fn, get_callbacks_fn):
-    from augmentation import augment_dataset
+    from augmentation import AugmentationGenerator
     from model        import unfreeze_top_layers
     from callbacks    import get_callbacks_fase2
 
@@ -59,10 +61,11 @@ def cross_validate(X, y, build_model_fn, get_callbacks_fn):
         X_val_fold   = X[val_idx]
         y_val_fold   = y[val_idx]
 
-        print(f"\n  Aplicando data augmentation al fold {fold}...")
-        X_train_aug, y_train_aug = augment_dataset(X_train_fold, y_train_fold)
+        print(f"\n  Creando generador de augmentation para fold {fold}...")
+        generador = AugmentationGenerator(X_train_fold, y_train_fold)
 
-        print(f"  Muestras entrenamiento (aumentadas) : {len(X_train_aug)}")
+        print(f"  Muestras entrenamiento (aumentadas) : {len(X_train_fold) * AUGMENTATION_FACTOR}")
+        print(f"  Batches por epoch                   : {len(generador)}")
         print(f"  Muestras validacion                 : {len(X_val_fold)}")
 
         model     = build_model_fn()
@@ -70,23 +73,23 @@ def cross_validate(X, y, build_model_fn, get_callbacks_fn):
 
         print(f"\n  Fase 1 — Entrenamiento con MobileNetV2 congelada")
         history = model.fit(
-            X_train_aug, y_train_aug,
+            generador,
             validation_data=(X_val_fold, y_val_fold),
             epochs=EPOCHS,
-            batch_size=BATCH_SIZE,
             callbacks=callbacks,
             verbose=0,
         )
 
         print(f"\n  Fase 2 — Fine-tuning")
-        model = unfreeze_top_layers(model)
+        model      = unfreeze_top_layers(model)
         callbacks_ft = get_callbacks_fase2(fold=fold)
 
+        generador_ft = AugmentationGenerator(X_train_fold, y_train_fold)
+
         history_ft = model.fit(
-            X_train_aug, y_train_aug,
+            generador_ft,
             validation_data=(X_val_fold, y_val_fold),
             epochs=EPOCHS // 2,
-            batch_size=BATCH_SIZE,
             callbacks=callbacks_ft,
             verbose=0,
         )
@@ -265,7 +268,7 @@ def evaluate_test_set(model, X_test, y_test):
         classification_report(
             y_test,
             y_pred,
-            target_names=GESTURES,
+            target_names=TRAIN_CLASSES,
             digits=4,
             zero_division=0,
         )
