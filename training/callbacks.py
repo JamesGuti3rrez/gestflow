@@ -17,6 +17,7 @@ from tensorflow.keras.callbacks import (
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 from config import (
     MODEL_DIR,
+    MODEL_PATH_FINETUNED,
     EARLY_STOPPING_PATIENCE,
     REDUCE_LR_PATIENCE,
     REDUCE_LR_FACTOR,
@@ -174,12 +175,12 @@ def get_callbacks_fase2(fold=None):
     )
 
     if fold is not None:
-        filename = f"gestflow_fold_{fold:02d}_finetuned.keras"
+        path = os.path.join(MODEL_DIR, f"gestflow_fold_{fold:02d}_finetuned.keras")
     else:
-        filename = "gesture_model_finetuned.keras"
+        path = MODEL_PATH_FINETUNED
 
     checkpoint_ft = ModelCheckpoint(
-        filepath=os.path.join(MODEL_DIR, filename),
+        filepath=path,
         monitor=CHECKPOINT_MONITOR,
         save_best_only=True,
         save_weights_only=False,

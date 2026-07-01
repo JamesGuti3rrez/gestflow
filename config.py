@@ -13,6 +13,7 @@ BASE_DIR    = os.path.dirname(os.path.abspath(__file__))
 DATASET_DIR = os.path.join(BASE_DIR, "dataset", "raw_videos")
 MODEL_DIR   = os.path.join(BASE_DIR, "training", "model")
 MODEL_PATH  = os.path.join(MODEL_DIR, "gesture_model.keras")
+MODEL_PATH_FINETUNED = os.path.join(MODEL_DIR, "gesture_model_finetuned.keras")
 
 # -------------------------------------------------------------
 #  Identificacion del integrante que graba

@@ -17,6 +17,7 @@ sys.path.append(os.path.dirname(__file__))
 
 from config import (
     MODEL_PATH,
+    MODEL_PATH_FINETUNED,
     MODEL_DIR,
     GESTURES,
     NUM_CLASSES,
@@ -51,6 +52,16 @@ def separador(titulo=""):
         print(f"{linea}")
     else:
         print(f"\n{linea}")
+
+
+# -------------------------------------------------------------
+#  Deteccion de entrenamiento ya completo
+#  Un entrenamiento se considera completo cuando existe el
+#  modelo final con fine-tuning y su modelo base (fase 1)
+# -------------------------------------------------------------
+
+def entrenamiento_ya_completo():
+    return os.path.exists(MODEL_PATH_FINETUNED) and os.path.exists(MODEL_PATH)
 
 
 # -------------------------------------------------------------
@@ -184,6 +195,17 @@ def guardar_modelo(model):
 
 def main():
     inicio = time.time()
+
+    if entrenamiento_ya_completo() and "--force" not in sys.argv:
+        separador("ENTRENAMIENTO YA EXISTENTE")
+        print(f"\n  Se encontro un modelo ya entrenado en:")
+        print(f"    {MODEL_PATH}")
+        print(f"    {MODEL_PATH_FINETUNED}")
+        print(f"\n  Se omite el entrenamiento para no sobrescribirlo.")
+        print(f"  Para forzar un reentrenamiento desde cero:")
+        print(f"    python training/02_train.py --force")
+        separador()
+        return
 
     separador("gestflow — ENTRENAMIENTO")
     print(f"\n  Clases    : {NUM_CLASSES}")
